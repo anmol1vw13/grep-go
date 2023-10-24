@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var flagSet tool.FlagOptions
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "grep",
@@ -19,6 +20,7 @@ var rootCmd = &cobra.Command{
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) { 
 		grep := tool.GrepProps{
+			Flags: flagSet,
 			Args: args,
 		}
 		result := grep.Search()
@@ -44,6 +46,7 @@ func Execute() {
 func init() {
 	rootCmd.SetUsageFunc(nil)
 	rootCmd.SetUsageTemplate("Grep tool")
+	rootCmd.Flags().StringVarP(&flagSet.OutputFile, "output", "o", "", "File to output data to")
 }
 
 

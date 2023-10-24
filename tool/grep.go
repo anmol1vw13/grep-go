@@ -3,6 +3,7 @@ package tool
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -13,6 +14,7 @@ type GrepProps struct {
 }
 
 type FlagOptions struct {
+	OutputFile string
 }
 
 type Result struct {
@@ -64,6 +66,24 @@ func (grep GrepProps) Search() Result {
 		return res
 	}
 
-	res.Lines = searchRes
+	if grep.Flags.OutputFile == "" {
+		res.Lines = searchRes
+	} else {
+
+		var outputFile *os.File
+		var err error
+
+		info, err := os.Stat(grep.Flags.OutputFile)
+
+		if err == nil && info.IsDir() {
+			res.Err = errors.New("Output file cannot be a directory")
+			return res
+		} else {
+			outputFile, err = os.OpenFile(grep.Flags.OutputFile, os.O_WRONLY|os.O_CREATE, 0644)
+		}
+		for _, res := range searchRes {
+			outputFile.WriteString(fmt.Sprintln(res))
+		}
+	}
 	return res
 }
