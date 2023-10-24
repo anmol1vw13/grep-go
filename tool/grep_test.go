@@ -52,6 +52,8 @@ func TestSearchWithOutputAsFile(t *testing.T) {
 	result := grep.Search()
 	assert.Equal(t, result.Err, nil)
 	f, err := os.Open("../test_assets/outputFile.txt")
+	defer f.Close()
+	defer os.Remove("../test_assets/outputFile.txt")
 	assert.Equal(t, err, nil)
 	scanner := bufio.NewScanner(f)
 	output := []string{}
@@ -61,4 +63,27 @@ func TestSearchWithOutputAsFile(t *testing.T) {
 	}
 	assert.Equal(t, output, []string{"I am a File with a search string and I don't know what to do.",
 		"Plus I don't know what a search string looks like"})
+}
+
+func TestCaseInsensitiveSearch(t *testing.T) {
+	grep := GrepProps{
+		Args:  []string{"Search String", "../test_assets/testFile.txt"},
+		Flags: FlagOptions{OutputFile: "../test_assets/outputFile.txt", CaseInsensitive: true},
+	}
+
+	result := grep.Search()
+	assert.Equal(t, result.Err, nil)
+	f, err := os.Open("../test_assets/outputFile.txt")
+	defer f.Close()
+	defer os.Remove("../test_assets/outputFile.txt")
+	assert.Equal(t, err, nil)
+	scanner := bufio.NewScanner(f)
+	output := []string{}
+
+	for scanner.Scan() {
+		output = append(output, scanner.Text())
+	}
+	assert.Equal(t, output, []string{"I am a File with a search string and I don't know what to do.",
+		"Plus I don't know what a search string looks like"})
+	
 }

@@ -60,12 +60,12 @@ func (grep GrepProps) Search() Result {
 	searchRes := make([]string, 0)
 	for scanner.Scan() {
 		text := scanner.Text()
-
+		textToSearchOn := text
 		if(grep.Flags.CaseInsensitive) {
-			text = strings.ToLower(text)
+			textToSearchOn = strings.ToLower(text)
 		}
 
-		if strings.Contains(text, searchText) {
+		if strings.Contains(textToSearchOn, searchText) {
 			searchRes = append(searchRes, text)
 		}
 	}
