@@ -15,6 +15,7 @@ type GrepProps struct {
 
 type FlagOptions struct {
 	OutputFile string
+	CaseInsensitive bool
 }
 
 type Result struct {
@@ -25,6 +26,9 @@ type Result struct {
 func (grep GrepProps) Search() Result {
 
 	searchText := grep.Args[0]
+	if(grep.Flags.CaseInsensitive) {
+		searchText = strings.ToLower(searchText)
+	}
 	var scanner *bufio.Scanner
 	res := Result{}
 
@@ -56,7 +60,12 @@ func (grep GrepProps) Search() Result {
 	searchRes := make([]string, 0)
 	for scanner.Scan() {
 		text := scanner.Text()
-		if strings.Contains(strings.ToLower(text), strings.ToLower(searchText)) {
+
+		if(grep.Flags.CaseInsensitive) {
+			text = strings.ToLower(text)
+		}
+
+		if strings.Contains(text, searchText) {
 			searchRes = append(searchRes, text)
 		}
 	}
@@ -69,21 +78,23 @@ func (grep GrepProps) Search() Result {
 	if grep.Flags.OutputFile == "" {
 		res.Lines = searchRes
 	} else {
+		writeOutputToFile(grep, res, searchRes)
+	}
+	return res
+}
 
-		var outputFile *os.File
-		var err error
+func writeOutputToFile(grep GrepProps, res Result, searchRes []string) {
+	var outputFile *os.File
+	var err error
 
-		info, err := os.Stat(grep.Flags.OutputFile)
+	info, err := os.Stat(grep.Flags.OutputFile)
 
-		if err == nil && info.IsDir() {
-			res.Err = errors.New("Output file cannot be a directory")
-			return res
-		} else {
-			outputFile, err = os.OpenFile(grep.Flags.OutputFile, os.O_WRONLY|os.O_CREATE, 0644)
-		}
+	if err == nil && info.IsDir() {
+		res.Err = errors.New("Output file cannot be a directory")
+	} else {
+		outputFile, err = os.OpenFile(grep.Flags.OutputFile, os.O_WRONLY|os.O_CREATE, 0644)
 		for _, res := range searchRes {
 			outputFile.WriteString(fmt.Sprintln(res))
 		}
 	}
-	return res
 }
