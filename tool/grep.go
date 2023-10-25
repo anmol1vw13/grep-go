@@ -3,7 +3,9 @@ package tool
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -16,6 +18,7 @@ type GrepProps struct {
 type FlagOptions struct {
 	OutputFile      string
 	CaseInsensitive bool
+	Recursive       bool
 }
 
 type Result struct {
@@ -32,24 +35,46 @@ func (grep GrepProps) Search() {
 	if grep.Flags.CaseInsensitive {
 		searchText = strings.ToLower(searchText)
 	}
-
-	var scanner *bufio.Scanner
-	var files []string
-	if len(grep.Args) > 1 {
-		files = grep.Args[1:]
-	} else {
-		files = []string{"-"}
-	}
 	maxFileBuffer := make(chan int, 10)
 	wg := &sync.WaitGroup{}
-	for _, fileName := range files {
+
+	if len(grep.Args) > 1 && grep.Flags.Recursive {
+		filepath.Walk(grep.Args[1], func(path string, info fs.FileInfo, err error) error {
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
+			if !info.IsDir() {
+				wg.Add(1)
+				go readFromFile(path, grep, searchText, maxFileBuffer, wg)
+			}
+			return nil
+		})
+	} else {
+
+		var file string
+		if len(grep.Args) > 1 {
+			fileInfo, err := os.Stat(grep.Args[1])
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			if fileInfo.IsDir() {
+				fmt.Println(err)
+				return
+			}
+			file = grep.Args[1]
+		} else {
+			file = "-"
+		}
 		wg.Add(1)
-		go readFromFile(fileName, scanner, grep, searchText, maxFileBuffer, wg)
+		go readFromFile(file, grep, searchText, maxFileBuffer, wg)
 	}
+
 	wg.Wait()
 }
 
-func readFromFile(fileName string, scanner *bufio.Scanner, grep GrepProps, searchText string, maxFileBuffer chan int, wg *sync.WaitGroup) {
+func readFromFile(fileName string, grep GrepProps, searchText string, maxFileBuffer chan int, wg *sync.WaitGroup) {
 
 	maxFileBuffer <- 1
 	defer func() {
@@ -58,17 +83,9 @@ func readFromFile(fileName string, scanner *bufio.Scanner, grep GrepProps, searc
 	}()
 	lineChan := make(chan string)
 	errChan := make(chan error)
-	if fileName != "-" {
-		fileInfo, err := os.Stat(fileName)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		if fileInfo.IsDir() {
-			fmt.Println(err)
-			return
-		}
+	var scanner *bufio.Scanner
 
+	if fileName != "-" {
 		file, err := os.Open(fileName)
 		defer file.Close()
 		if err != nil {

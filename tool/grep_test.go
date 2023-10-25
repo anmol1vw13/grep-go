@@ -23,6 +23,8 @@ func TestSearchWithOneFileAndOneSearchParam(t *testing.T) {
 
 }
 
+
+
 func TestSearchWithReadFromStandardInput(t *testing.T) {
 	oldStdIn := os.Stdin
 	defer func() { os.Stdin = oldStdIn }()
@@ -71,6 +73,28 @@ func TestCaseInsensitiveSearch(t *testing.T) {
 	grep := GrepProps{
 		Args:  []string{"Search String", "../test_assets/testFile.txt"},
 		Flags: FlagOptions{OutputFile: "../test_assets/outputFile.txt", CaseInsensitive: true},
+	}
+
+	grep.Search()
+	f, err := os.Open("../test_assets/outputFile.txt")
+	defer f.Close()
+	defer os.Remove("../test_assets/outputFile.txt")
+	assert.Equal(t, err, nil)
+	scanner := bufio.NewScanner(f)
+	output := []string{}
+
+	for scanner.Scan() {
+		output = append(output, scanner.Text())
+	}
+	assert.Equal(t, output, []string{"I am a File with a search string and I don't know what to do.",
+		"Plus I don't know what a search string looks like"})
+
+}
+
+func TestRecursiveAndCaseInsensitiveSearch(t *testing.T) {
+	grep := GrepProps{
+		Args:  []string{"Search String", "../test_assets/"},
+		Flags: FlagOptions{OutputFile: "../test_assets/outputFile.txt", CaseInsensitive: true, Recursive: true},
 	}
 
 	grep.Search()

@@ -41,6 +41,8 @@ func init() {
 	rootCmd.SetUsageTemplate("Grep tool")
 	rootCmd.Flags().StringVarP(&flagSet.OutputFile, "output", "o", "", "File to output data to")
 	rootCmd.Flags().BoolVarP(&flagSet.CaseInsensitive, "ignoreCase", "i", false, "If true it performs a case insensitive search")
+	rootCmd.Flags().BoolVarP(&flagSet.Recursive, "recursive", "r", false, "If true it performs a recursive search within a directory")
+
 
 }
 
