@@ -2,10 +2,10 @@ package tool
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 type GrepProps struct {
@@ -14,86 +14,141 @@ type GrepProps struct {
 }
 
 type FlagOptions struct {
-	OutputFile string
+	OutputFile      string
 	CaseInsensitive bool
 }
 
 type Result struct {
+	File  string
 	Lines []string
 	Err   error
 }
 
-func (grep GrepProps) Search() Result {
+const chunkSize = 1024 * 1024
+
+func (grep GrepProps) Search() {
 
 	searchText := grep.Args[0]
-	if(grep.Flags.CaseInsensitive) {
+	if grep.Flags.CaseInsensitive {
 		searchText = strings.ToLower(searchText)
 	}
+
 	var scanner *bufio.Scanner
-	res := Result{}
-
+	var files []string
 	if len(grep.Args) > 1 {
-		fileName := grep.Args[1]
+		files = grep.Args[1:]
+	} else {
+		files = []string{"-"}
+	}
+	maxFileBuffer := make(chan int, 10)
+	wg := &sync.WaitGroup{}
+	for _, fileName := range files {
+		wg.Add(1)
+		go readFromFile(fileName, scanner, grep, searchText, maxFileBuffer, wg)
+	}
+	wg.Wait()
+}
 
+func readFromFile(fileName string, scanner *bufio.Scanner, grep GrepProps, searchText string, maxFileBuffer chan int, wg *sync.WaitGroup) {
+
+	maxFileBuffer <- 1
+	defer func() {
+		<-maxFileBuffer
+		wg.Done()
+	}()
+	lineChan := make(chan string)
+	errChan := make(chan error)
+	if fileName != "-" {
 		fileInfo, err := os.Stat(fileName)
 		if err != nil {
-			res.Err = err
-			return res
+			fmt.Println(err)
+			return
 		}
 		if fileInfo.IsDir() {
-			res.Err = errors.New("File is a directory")
-			return res
+			fmt.Println(err)
+			return
 		}
 
 		file, err := os.Open(fileName)
 		defer file.Close()
 		if err != nil {
-			res.Err = err
-			return res
+			fmt.Println(err)
+			return
 		}
 
 		scanner = bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, chunkSize), chunkSize)
+
 	} else {
 		scanner = bufio.NewScanner(os.Stdin)
 	}
 
-	searchRes := make([]string, 0)
-	for scanner.Scan() {
-		text := scanner.Text()
-		textToSearchOn := text
-		if(grep.Flags.CaseInsensitive) {
-			textToSearchOn = strings.ToLower(text)
+	go func() {
+		defer close(lineChan)
+		defer close(errChan)
+		for scanner.Scan() {
+			lineChan <- scanner.Text()
 		}
 
-		if strings.Contains(textToSearchOn, searchText) {
-			searchRes = append(searchRes, text)
+		if err := scanner.Err(); err != nil {
+			errChan <- err
 		}
-	}
+	}()
 
-	if err := scanner.Err(); err != nil {
-		res.Err = err
-		return res
-	}
-
-	if grep.Flags.OutputFile == "" {
-		res.Lines = searchRes
+	result := grep.search(lineChan, errChan, searchText)
+	result.File = fileName
+	if result.Err != nil {
+		fmt.Println(result.Err)
 	} else {
-		writeOutputToFile(grep, res, searchRes)
+		if grep.Flags.OutputFile == "" {
+			for _, line := range result.Lines {
+				fmt.Println(line)
+			}
+
+		} else {
+			writeOutputToFile(grep, result.Lines)
+		}
 	}
-	return res
 }
 
-func writeOutputToFile(grep GrepProps, res Result, searchRes []string) {
+func (grep GrepProps) search(lineChan chan string, errChan chan error, searchText string) Result {
+	searchRes := Result{Lines: make([]string, 0)}
+	for {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				searchRes.Err = err
+				return searchRes
+			}
+		case line, ok := <-lineChan:
+			if !ok {
+				return searchRes
+			}
+
+			textToSearchOn := line
+			if grep.Flags.CaseInsensitive {
+				textToSearchOn = strings.ToLower(line)
+			}
+
+			if strings.Contains(textToSearchOn, searchText) {
+				searchRes.Lines = append(searchRes.Lines, line)
+			}
+
+		}
+	}
+}
+
+func writeOutputToFile(grep GrepProps, resLines []string) {
 	var outputFile *os.File
 	var err error
 
 	info, err := os.Stat(grep.Flags.OutputFile)
 
 	if err == nil && info.IsDir() {
-		res.Err = errors.New("Output file cannot be a directory")
+		fmt.Println(err)
 	} else {
 		outputFile, err = os.OpenFile(grep.Flags.OutputFile, os.O_WRONLY|os.O_CREATE, 0644)
-		for _, res := range searchRes {
+		for _, res := range resLines {
 			outputFile.WriteString(fmt.Sprintln(res))
 		}
 	}

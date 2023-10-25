@@ -4,7 +4,6 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/anmol1vw13/grep/tool"
@@ -23,14 +22,8 @@ var rootCmd = &cobra.Command{
 			Flags: flagSet,
 			Args: args,
 		}
-		result := grep.Search()
-		if result.Err != nil {
-			fmt.Println(result.Err)
-		} else {
-			for _,line := range result.Lines {
-				fmt.Println(line)
-			}
-		}
+		grep.Search()
+		
 	},
 }
 
